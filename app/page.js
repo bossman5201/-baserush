@@ -1,8 +1,8 @@
 "use client";
 import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Wallet, ConnectWallet, WalletDropdown, WalletDropdownDisconnect } from '@coinbase/onchainkit/wallet';
-import { useAccount, useSendTransaction } from 'wagmi';
+import { ConnectWallet } from '@coinbase/onchainkit/wallet';
+import { useAccount, useSendTransaction, useDisconnect } from 'wagmi';
 import { parseEther } from 'viem';
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
@@ -12,13 +12,15 @@ const RETRY_FEE = "0.0001";
 
 export default function BaseRush() {
   const { address, isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
   const { sendTransactionAsync } = useSendTransaction();
+  
   const [score, setScore] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [timeLeft, setTimeLeft] = useState(120);
   const [canPlayFree, setCanPlayFree] = useState(true);
   const [leaderboard, setLeaderboard] = useState([]);
-  const [status, setStatus] = useState("SYSTEM READY");
+  const [status, setStatus] = useState("SYSTEM ONLINE");
   const [isProcessing, setIsProcessing] = useState(false);
   const timerRef = useRef(null);
 
@@ -87,54 +89,68 @@ export default function BaseRush() {
   return (
     <div style={{ backgroundColor: '#000', color: '#fff', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', fontFamily: 'monospace' }}>
       
-      {/* HEADER */}
-      <div style={{ width: '100%', maxWidth: '600px', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box' }}>
-        <div style={{ fontWeight: '900', color: '#0052FF', fontSize: '1.2rem' }}>BASERUSH</div>
+      {/* CUSTOM HEADER (NO WHITE BOXES) */}
+      <div style={{ width: '100%', maxWidth: '800px', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #111' }}>
+        <div style={{ fontWeight: '900', color: '#0052FF', fontSize: '1.2rem', letterSpacing: '2px' }}>BASERUSH</div>
         
-        <div className="ock-dark-theme"> 
-          <Wallet>
-            <ConnectWallet className="bg-[#0052FF] rounded-lg border-none py-2 px-4">
-              <span className="text-white font-bold text-sm">{isConnected ? 'PLAYER ACTIVE' : 'SIGN IN'}</span>
-            </ConnectWallet>
-            <WalletDropdown />
-          </Wallet>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+          {!isConnected ? (
+            <ConnectWallet className="bg-[#0052FF] text-white rounded-lg px-4 py-2 font-bold border-none cursor-pointer" />
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#111', padding: '5px 15px', borderRadius: '12px', border: '1px solid #222' }}>
+              <span style={{ fontSize: '0.7rem', color: '#00FF88' }}>●</span>
+              <span style={{ fontSize: '0.8rem', color: '#fff' }}>{address.slice(0,6)}...</span>
+              <button 
+                onClick={() => disconnect()}
+                style={{ background: 'none', border: 'none', color: '#ff4444', fontSize: '0.7rem', cursor: 'pointer', marginLeft: '5px', padding: '5px', fontWeight: 'bold' }}
+              >
+                [EXIT]
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
-      <div style={{ padding: '0 20px 40px 20px', width: '100%', maxWidth: '500px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ padding: '40px 20px', width: '100%', maxWidth: '500px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         
-        <div style={{ textAlign: 'center', marginTop: '20px' }}>
-            <div style={{ fontSize: '0.7rem', color: '#444', letterSpacing: '5px' }}>TOTAL_TAPS</div>
-            <div style={{ fontSize: '7rem', fontWeight: '900', color: '#fff', margin: '10px 0', lineHeight: '1' }}>{score}</div>
-            <div style={{ color: '#0052FF', fontSize: '0.9rem', fontWeight: 'bold' }}>{isPlaying ? `${timeLeft}s` : status}</div>
+        {/* SCORE BOARD */}
+        <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: '0.7rem', color: '#444', letterSpacing: '5px' }}>TAPS_SYNCED</div>
+            <div style={{ fontSize: '9rem', fontWeight: '900', color: '#fff', margin: '10px 0', lineHeight: '0.8' }}>{score}</div>
+            <div style={{ color: '#0052FF', fontSize: '1rem', fontWeight: 'bold', minHeight: '24px' }}>
+                {isPlaying ? `${timeLeft}s REMAINING` : status}
+            </div>
         </div>
 
-        {/* TAP AREA */}
+        {/* ARCADE TAP BUTTON */}
         <div 
           onPointerDown={handleTap}
           style={{
-            width: '240px', height: '240px', borderRadius: '50%',
-            background: isPlaying ? 'radial-gradient(circle, #0052FF44 0%, #000 100%)' : '#050505',
-            border: `6px solid ${isPlaying ? '#0052FF' : '#111'}`,
-            margin: '30px 0', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', transition: 'all 0.1s', userSelect: 'none', touchAction: 'none'
+            width: '260px', height: '260px', borderRadius: '50%',
+            background: isPlaying ? 'radial-gradient(circle, #0052FF22 0%, #000 100%)' : '#050505',
+            border: `4px solid ${isPlaying ? '#0052FF' : '#111'}`,
+            margin: '40px 0', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', transition: 'all 0.1s', userSelect: 'none', touchAction: 'none',
+            boxShadow: isPlaying ? '0 0 40px #0052FF22' : 'none'
           }}
         >
           {!isPlaying && isConnected && (
-            <button onClick={handleStartRequest} style={{ background: 'none', border: 'none', color: '#0052FF', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer' }}>
-               {canPlayFree ? 'PLAY FREE' : 'PAY TO RETRY'}
+            <button onClick={handleStartRequest} style={{ background: '#0052FF', border: 'none', color: '#fff', fontWeight: 'bold', fontSize: '1.1rem', padding: '15px 30px', borderRadius: '12px', cursor: 'pointer', boxShadow: '0 5px 15px rgba(0,82,255,0.4)' }}>
+               {canPlayFree ? 'START FREE' : 'PAY TO RETRY'}
             </button>
           )}
-          {isPlaying && <div style={{ fontSize: '2rem', fontWeight: '900', opacity: 0.1 }}>TAP!</div>}
+          {isPlaying && <div style={{ fontSize: '2rem', fontWeight: '900', color: '#0052FF', opacity: 0.3 }}>TAP!</div>}
         </div>
 
         {/* RANKINGS */}
-        <div style={{ width: '100%', background: '#050505', borderRadius: '20px', padding: '20px', border: '1px solid #111' }}>
-          <div style={{ fontSize: '0.6rem', color: '#333', marginBottom: '15px', textAlign: 'center', letterSpacing: '2px' }}>RANKINGS</div>
+        <div style={{ width: '100%', background: '#050505', borderRadius: '24px', padding: '25px', border: '1px solid #111' }}>
+          <div style={{ fontSize: '0.6rem', color: '#333', marginBottom: '20px', textAlign: 'center', letterSpacing: '4px' }}>TOP_RUSHERS</div>
           {leaderboard.map((entry, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: i === leaderboard.length - 1 ? 'none' : '1px solid #111' }}>
-              <span style={{ color: i === 0 ? '#00FF88' : '#666', fontSize: '0.8rem' }}>{i + 1}. {entry.player_id.slice(0,10)}</span>
-              <span style={{ fontWeight: 'bold', fontSize: '0.8rem' }}>{entry.score}</span>
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: i === leaderboard.length - 1 ? 'none' : '1px solid #111' }}>
+              <span style={{ color: i === 0 ? '#00FF88' : '#555', fontSize: '0.8rem' }}>
+                {i + 1}. {entry.player_id.slice(0,12)}
+              </span>
+              <span style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>{entry.score}</span>
             </div>
           ))}
         </div>
