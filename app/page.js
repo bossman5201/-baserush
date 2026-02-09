@@ -85,55 +85,56 @@ export default function BaseRush() {
   useEffect(() => { if (timeLeft === 0 && isPlaying) endGame(); }, [timeLeft]);
 
   return (
-    <div style={{ backgroundColor: '#000', color: '#fff', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', fontFamily: 'monospace', overflowX: 'hidden' }}>
+    <div style={{ backgroundColor: '#000', color: '#fff', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', fontFamily: 'monospace' }}>
       
-      {/* GLASSMORPHIC HEADER */}
-      <div style={{ width: '100%', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backdropFilter: 'blur(10px)', borderBottom: '1px solid #111', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ fontWeight: '900', color: '#0052FF', letterSpacing: '2px' }}>BASERUSH_V1</div>
-        <Wallet>
-          <ConnectWallet className="bg-[#0052FF] rounded-xl border-none">
-            <span className="text-white font-bold px-2">{isConnected ? 'PLAYER ACTIVE' : 'INITIALIZE'}</span>
-          </ConnectWallet>
-          <WalletDropdown><WalletDropdownDisconnect /></WalletDropdown>
-        </Wallet>
+      {/* HEADER */}
+      <div style={{ width: '100%', maxWidth: '600px', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxSizing: 'border-box' }}>
+        <div style={{ fontWeight: '900', color: '#0052FF', fontSize: '1.2rem' }}>BASERUSH</div>
+        
+        <div className="ock-dark-theme"> 
+          <Wallet>
+            <ConnectWallet className="bg-[#0052FF] rounded-lg border-none py-2 px-4">
+              <span className="text-white font-bold text-sm">{isConnected ? 'PLAYER ACTIVE' : 'SIGN IN'}</span>
+            </ConnectWallet>
+            <WalletDropdown />
+          </Wallet>
+        </div>
       </div>
 
-      <div style={{ padding: '20px', width: '100%', maxWidth: '500px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <div style={{ padding: '0 20px 40px 20px', width: '100%', maxWidth: '500px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         
-        {/* SCORE DISPLAY */}
-        <div style={{ textAlign: 'center', marginTop: '40px' }}>
-            <div style={{ fontSize: '0.8rem', color: '#444', letterSpacing: '5px' }}>TOTAL_TAPS</div>
-            <div style={{ fontSize: '9rem', fontWeight: '900', color: '#fff', lineHeight: '0.8', margin: '20px 0' }}>{score}</div>
-            <div style={{ color: '#0052FF', fontSize: '1rem', fontWeight: 'bold' }}>{isPlaying ? `${timeLeft}s REMAINING` : status}</div>
+        <div style={{ textAlign: 'center', marginTop: '20px' }}>
+            <div style={{ fontSize: '0.7rem', color: '#444', letterSpacing: '5px' }}>TOTAL_TAPS</div>
+            <div style={{ fontSize: '7rem', fontWeight: '900', color: '#fff', margin: '10px 0', lineHeight: '1' }}>{score}</div>
+            <div style={{ color: '#0052FF', fontSize: '0.9rem', fontWeight: 'bold' }}>{isPlaying ? `${timeLeft}s` : status}</div>
         </div>
 
-        {/* TAP TARGET */}
+        {/* TAP AREA */}
         <div 
           onPointerDown={handleTap}
           style={{
-            width: '260px', height: '260px', borderRadius: '50%',
-            background: isPlaying ? 'radial-gradient(circle, #0052FF 0%, #000 100%)' : '#050505',
-            border: `4px solid ${isPlaying ? '#0052FF' : '#111'}`,
-            margin: '40px 0', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            cursor: 'pointer', transition: 'all 0.1s', userSelect: 'none', touchAction: 'none',
-            boxShadow: isPlaying ? '0 0 50px #0052FF33' : 'none'
+            width: '240px', height: '240px', borderRadius: '50%',
+            background: isPlaying ? 'radial-gradient(circle, #0052FF44 0%, #000 100%)' : '#050505',
+            border: `6px solid ${isPlaying ? '#0052FF' : '#111'}`,
+            margin: '30px 0', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', transition: 'all 0.1s', userSelect: 'none', touchAction: 'none'
           }}
         >
           {!isPlaying && isConnected && (
-            <button onClick={handleStartRequest} style={{ background: 'none', border: 'none', color: '#0052FF', fontWeight: 'bold', fontSize: '1.2rem', cursor: 'pointer' }}>
-               {canPlayFree ? 'START FREE' : 'PAY RETRY'}
+            <button onClick={handleStartRequest} style={{ background: 'none', border: 'none', color: '#0052FF', fontWeight: 'bold', fontSize: '1rem', cursor: 'pointer' }}>
+               {canPlayFree ? 'PLAY FREE' : 'PAY TO RETRY'}
             </button>
           )}
-          {isPlaying && <div style={{ fontSize: '2rem', fontWeight: '900', opacity: 0.2 }}>TAP!</div>}
+          {isPlaying && <div style={{ fontSize: '2rem', fontWeight: '900', opacity: 0.1 }}>TAP!</div>}
         </div>
 
-        {/* LEADERBOARD */}
-        <div style={{ width: '100%', background: '#050505', borderRadius: '25px', padding: '20px', border: '1px solid #111' }}>
-          <div style={{ fontSize: '0.6rem', color: '#333', marginBottom: '15px', textAlign: 'center', letterSpacing: '3px' }}>TOP_RUSHERS_RANKING</div>
+        {/* RANKINGS */}
+        <div style={{ width: '100%', background: '#050505', borderRadius: '20px', padding: '20px', border: '1px solid #111' }}>
+          <div style={{ fontSize: '0.6rem', color: '#333', marginBottom: '15px', textAlign: 'center', letterSpacing: '2px' }}>RANKINGS</div>
           {leaderboard.map((entry, i) => (
-            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid #111' }}>
-              <span style={{ color: i === 0 ? '#00FF88' : '#555', fontSize: '0.9rem' }}>{i + 1}. {entry.player_id.slice(0,8)}</span>
-              <span style={{ fontWeight: 'bold' }}>{entry.score}</span>
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: i === leaderboard.length - 1 ? 'none' : '1px solid #111' }}>
+              <span style={{ color: i === 0 ? '#00FF88' : '#666', fontSize: '0.8rem' }}>{i + 1}. {entry.player_id.slice(0,10)}</span>
+              <span style={{ fontWeight: 'bold', fontSize: '0.8rem' }}>{entry.score}</span>
             </div>
           ))}
         </div>
