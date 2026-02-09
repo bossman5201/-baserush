@@ -1,3 +1,4 @@
+
 {
   "name": "baserush",
   "version": "0.1.0",
@@ -11,6 +12,10 @@
     "next": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "@supabase/supabase-js": "latest"
+    "@supabase/supabase-js": "latest",
+    "@coinbase/onchainkit": "latest",
+    "viem": "latest",
+    "wagmi": "latest",
+    "@tanstack/react-query": "latest"
   }
 }
