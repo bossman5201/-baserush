@@ -21,36 +21,42 @@ export default function BaseRush() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [status, setStatus] = useState("SYSTEM READY");
   
-  // Audio Refs
   const audioCtx = useRef(null);
-  const masterGain = useRef(null);
   const timerRef = useRef(null);
 
-  // Initialize Audio on the FIRST click
+  // Initialize Audio safely on first click
   const initAudio = () => {
     if (audioCtx.current) return;
-    audioCtx.current = new (window.AudioContext || window.webkitAudioContext)();
-    masterGain.current = audioCtx.current.createGain();
-    masterGain.current.gain.value = 0;
-    masterGain.current.connect(audioCtx.current.destination);
+    try {
+      audioCtx.current = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+      console.error("Audio not supported");
+    }
   };
 
   const playTapSound = () => {
-    if (!audioCtx.current || !masterGain.current) return;
-    if (audioCtx.current.state === 'suspended') audioCtx.current.resume();
+    if (!audioCtx.current) return;
+    try {
+      if (audioCtx.current.state === 'suspended') audioCtx.current.resume();
 
-    const osc = audioCtx.current.createOscillator();
-    const g = audioCtx.current.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(200 + (score % 300), audioCtx.current.currentTime);
-    
-    g.gain.setValueAtTime(0.1, audioCtx.current.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.current.currentTime + 0.05);
-    
-    osc.connect(g);
-    g.connect(masterGain.current.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 0.05);
+      const osc = audioCtx.current.createOscillator();
+      const g = audioCtx.current.createGain();
+      
+      osc.type = 'sine';
+      // Pitch goes up slightly as you score
+      osc.frequency.setValueAtTime(200 + (score % 300), audioCtx.current.currentTime);
+      
+      g.gain.setValueAtTime(0.1, audioCtx.current.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.current.currentTime + 0.05);
+      
+      osc.connect(g);
+      g.connect(audioCtx.current.destination);
+      
+      osc.start();
+      osc.stop(audioCtx.current.currentTime + 0.05);
+    } catch (e) {
+      // If audio fails, don't crash the game
+    }
   };
 
   useEffect(() => {
@@ -70,99 +76,112 @@ export default function BaseRush() {
   }
 
   const handleStartRequest = async () => {
-    initAudio(); // Unlocks audio on button click
+    initAudio();
     if (!isConnected) return;
     if (canPlayFree) startGame();
     else handlePayment();
   };
 
   const handlePayment = async () => {
-    setStatus("PAYING...");
+    setStatus("WAITING FOR PAYMENT...");
     try {
       await sendTransactionAsync({ to: RECIPIENT_ADDRESS, value: parseEther(RETRY_FEE) });
       startGame();
-    } catch (err) { setStatus("CANCELED"); }
+    } catch (err) { 
+      setStatus("CANCELED"); 
+    }
   };
 
   const startGame = () => {
     setIsPlaying(true);
     setScore(0);
     setTimeLeft(120);
-    setStatus("RUSHING!");
+    setStatus("RUSH!");
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
-        if (prev <= 1) { clearInterval(timerRef.current); return 0; }
+        if (prev <= 1) {
+          clearInterval(timerRef.current);
+          return 0;
+        }
         return prev - 1;
       });
     }, 1000);
   };
 
-  const handleTap = (e) => {
-    e.preventDefault();
+  const handleTap = () => {
     if (!isPlaying) return;
-    playTapSound();
+    // Score updates FIRST so even if audio glitches, the game works
     setScore(s => s + 1);
+    playTapSound();
   };
 
   async function endGame() {
     setIsPlaying(false);
     if (timerRef.current) clearInterval(timerRef.current);
     await supabase.from('rounds').insert([{ player_id: address, score: score, is_paid: !canPlayFree }]);
+    setStatus("SCORE SAVED!");
     fetchLeaderboard();
     checkFreeChance();
   }
 
-  useEffect(() => { if (timeLeft === 0 && isPlaying) endGame(); }, [timeLeft]);
+  useEffect(() => {
+    if (timeLeft === 0 && isPlaying) endGame();
+  }, [timeLeft, isPlaying]);
 
   return (
     <div style={{ backgroundColor: '#000', color: '#fff', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', fontFamily: 'monospace' }}>
       
-      {/* CLEAN HEADER - NO WHITE BOXES */}
+      {/* HEADER */}
       <div style={{ width: '100%', maxWidth: '800px', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontWeight: '900', color: '#0052FF' }}>BASERUSH</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        <div style={{ fontWeight: '900', color: '#0052FF', fontSize: '1.2rem' }}>BASERUSH</div>
+        <div style={{ display: 'flex', alignItems: 'center', background: '#111', padding: '5px 12px', borderRadius: '10px', border: '1px solid #222' }}>
           {!isConnected ? (
-            <ConnectWallet className="bg-[#0052FF] text-white rounded-lg px-4 py-2 font-bold border-none" />
+            <ConnectWallet className="bg-transparent border-none p-0 text-white font-bold" />
           ) : (
-            <div style={{ background: '#111', padding: '5px 15px', borderRadius: '12px', border: '1px solid #222', display: 'flex', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.8rem', marginRight: '10px' }}>{address.slice(0,6)}...</span>
+            <>
+              <span style={{ fontSize: '0.8rem', color: '#aaa', marginRight: '10px' }}>{address.slice(0,6)}...</span>
               <button onClick={() => disconnect()} style={{ background: 'none', border: 'none', color: '#ff4444', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 'bold' }}>[EXIT]</button>
-            </div>
+            </>
           )}
         </div>
       </div>
 
-      <div style={{ textAlign: 'center', marginTop: '40px' }}>
-        <div style={{ fontSize: '9rem', fontWeight: '900', color: '#fff', lineHeight: '0.8' }}>{score}</div>
-        <div style={{ color: '#0052FF', fontSize: '1.2rem', fontWeight: 'bold', marginTop: '20px' }}>
+      <div style={{ textAlign: 'center', marginTop: '30px' }}>
+        <div style={{ fontSize: '9rem', fontWeight: '900', color: '#fff', lineHeight: '1' }}>{score}</div>
+        <div style={{ color: '#0052FF', fontSize: '1.5rem', fontWeight: 'bold', height: '30px', marginTop: '10px' }}>
             {isPlaying ? `${timeLeft}s` : status}
         </div>
       </div>
 
       <div 
-        onPointerDown={handleTap}
+        onClick={handleTap}
         style={{
           width: '260px', height: '260px', borderRadius: '50%',
           background: isPlaying ? 'radial-gradient(circle, #0052FF33 0%, #000 100%)' : '#050505',
           border: `6px solid ${isPlaying ? '#0052FF' : '#111'}`,
           margin: '40px 0', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', userSelect: 'none', touchAction: 'none'
+          cursor: 'pointer', userSelect: 'none', touchAction: 'none', transition: 'all 0.1s'
         }}
       >
-        {!isPlaying && isConnected && (
-            <button onClick={handleStartRequest} style={{ background: '#0052FF', border: 'none', color: '#fff', fontWeight: 'bold', padding: '20px 40px', borderRadius: '15px', cursor: 'pointer', fontSize: '1.2rem' }}>
+        {!isPlaying && (
+          isConnected ? (
+            <button onClick={handleStartRequest} style={{ background: '#0052FF', border: 'none', color: '#fff', fontWeight: 'bold', padding: '15px 30px', borderRadius: '12px', cursor: 'pointer', fontSize: '1rem' }}>
                 {canPlayFree ? 'START FREE' : `RETRY (0.0001 ETH)`}
             </button>
+          ) : (
+            <div style={{ color: '#444', fontSize: '0.8rem' }}>CONNECT WALLET</div>
+          )
         )}
-        {isPlaying && <div style={{ fontSize: '2rem', fontWeight: '900', color: '#0052FF', opacity: 0.3 }}>TAP!</div>}
+        {isPlaying && <div style={{ fontSize: '2rem', fontWeight: '900', color: '#0052FF', opacity: 0.2, pointerEvents: 'none' }}>TAP!</div>}
       </div>
 
-      <div style={{ width: '100%', maxWidth: '400px', background: '#050505', padding: '25px', borderRadius: '24px', border: '1px solid #111' }}>
-        <div style={{ fontSize: '0.6rem', color: '#333', textAlign: 'center', marginBottom: '20px', letterSpacing: '4px' }}>TOP RUSHERS</div>
+      {/* LEADERBOARD */}
+      <div style={{ width: '100%', maxWidth: '400px', background: '#050505', padding: '20px', borderRadius: '20px', border: '1px solid #111', marginBottom: '40px' }}>
+        <div style={{ fontSize: '0.6rem', color: '#333', textAlign: 'center', marginBottom: '15px', letterSpacing: '4px' }}>RANKINGS</div>
         {leaderboard.map((entry, i) => (
-          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: i === leaderboard.length - 1 ? 'none' : '1px solid #111' }}>
-            <span style={{ color: i === 0 ? '#00FF88' : '#555', fontSize: '0.8rem' }}>{i + 1}. {entry.player_id.slice(0,10)}</span>
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: i === leaderboard.length - 1 ? 'none' : '1px solid #111' }}>
+            <span style={{ color: i === 0 ? '#00FF88' : '#666', fontSize: '0.8rem' }}>{i + 1}. {entry.player_id.slice(0,10)}</span>
             <span style={{ fontWeight: 'bold' }}>{entry.score}</span>
           </div>
         ))}
