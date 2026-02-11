@@ -8,16 +8,10 @@ import { coinbaseWallet } from 'wagmi/connectors';
 
 export default function RootLayout({ children }) {
   const [queryClient] = useState(() => new QueryClient());
-
   const [wagmiConfig] = useState(() => 
     createConfig({
       chains: [base],
-      connectors: [
-        coinbaseWallet({ 
-          appName: 'BaseRush Arcade',
-          preference: 'smartWalletOnly', 
-        }),
-      ],
+      connectors: [coinbaseWallet({ appName: 'BaseRush Arcade', preference: 'smartWalletOnly' })],
       ssr: true,
       transports: { [base.id]: http() },
     })
@@ -33,10 +27,7 @@ export default function RootLayout({ children }) {
       <body style={{ margin: 0, backgroundColor: '#000', color: '#fff' }}>
         <WagmiProvider config={wagmiConfig}>
           <QueryClientProvider client={queryClient}>
-            <OnchainKitProvider 
-              chain={base} 
-              apiKey={process.env.NEXT_PUBLIC_CDP_API_KEY}
-            >
+            <OnchainKitProvider chain={base} apiKey={process.env.NEXT_PUBLIC_CDP_API_KEY}>
               {children}
             </OnchainKitProvider>
           </QueryClientProvider>
