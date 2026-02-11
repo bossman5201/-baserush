@@ -19,14 +19,39 @@ export default function BaseRush() {
   const [timeLeft, setTimeLeft] = useState(120);
   const [canPlayFree, setCanPlayFree] = useState(true);
   const [leaderboard, setLeaderboard] = useState([]);
-  const [status, setStatus] = useState("SYSTEM ONLINE");
-  const [isFever, setIsFever] = useState(false);
+  const [status, setStatus] = useState("SYSTEM READY");
   
-  // Anti-Cheat & Fever Refs
-  const lastTapTime = useRef(0);
-  const tapIntervals = useRef([]);
-  const recentTaps = useRef([]);
+  // Audio Refs
+  const audioCtx = useRef(null);
+  const masterGain = useRef(null);
   const timerRef = useRef(null);
+
+  // Initialize Audio on the FIRST click
+  const initAudio = () => {
+    if (audioCtx.current) return;
+    audioCtx.current = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain.current = audioCtx.current.createGain();
+    masterGain.current.gain.value = 0;
+    masterGain.current.connect(audioCtx.current.destination);
+  };
+
+  const playTapSound = () => {
+    if (!audioCtx.current || !masterGain.current) return;
+    if (audioCtx.current.state === 'suspended') audioCtx.current.resume();
+
+    const osc = audioCtx.current.createOscillator();
+    const g = audioCtx.current.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(200 + (score % 300), audioCtx.current.currentTime);
+    
+    g.gain.setValueAtTime(0.1, audioCtx.current.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.current.currentTime + 0.05);
+    
+    osc.connect(g);
+    g.connect(masterGain.current.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.05);
+  };
 
   useEffect(() => {
     fetchLeaderboard();
@@ -44,41 +69,26 @@ export default function BaseRush() {
     setCanPlayFree(!(data && data.length > 0));
   }
 
-  const handleTap = (e) => {
-    e.preventDefault();
-    if (!isPlaying) return;
-
-    const now = Date.now();
-    const interval = now - lastTapTime.current;
-    
-    // --- ANTI-CHEAT: Consistency Check ---
-    // If the last 10 taps have exactly the same millisecond delay, it's a bot.
-    tapIntervals.current.push(interval);
-    if (tapIntervals.current.length > 10) tapIntervals.current.shift();
-    const isBot = tapIntervals.current.length === 10 && new Set(tapIntervals.current).size <= 2;
-
-    // --- FEVER MODE: Speed Check ---
-    recentTaps.current.push(now);
-    recentTaps.current = recentTaps.current.filter(t => now - t < 1000); // Only keep taps from the last 1 second
-    
-    const tapsPerSecond = recentTaps.current.length;
-    if (tapsPerSecond > 8) setIsFever(true);
-    else setIsFever(false);
-
-    // --- SCORING ---
-    if (!isBot && tapsPerSecond < 25) { // Real humans rarely cross 25 taps/sec
-        const points = isFever ? 2 : 1;
-        setScore(s => s + points);
-    }
-
-    lastTapTime.current = now;
+  const handleStartRequest = async () => {
+    initAudio(); // Unlocks audio on button click
+    if (!isConnected) return;
+    if (canPlayFree) startGame();
+    else handlePayment();
   };
 
-  const startGame = (isPaidRound) => {
+  const handlePayment = async () => {
+    setStatus("PAYING...");
+    try {
+      await sendTransactionAsync({ to: RECIPIENT_ADDRESS, value: parseEther(RETRY_FEE) });
+      startGame();
+    } catch (err) { setStatus("CANCELED"); }
+  };
+
+  const startGame = () => {
     setIsPlaying(true);
     setScore(0);
     setTimeLeft(120);
-    tapIntervals.current = [];
+    setStatus("RUSHING!");
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
@@ -88,22 +98,15 @@ export default function BaseRush() {
     }, 1000);
   };
 
-  const handleStartRequest = async () => {
-    if (!isConnected) return;
-    if (canPlayFree) startGame(false);
-    else handlePayment();
-  };
-
-  const handlePayment = async () => {
-    try {
-      await sendTransactionAsync({ to: RECIPIENT_ADDRESS, value: parseEther(RETRY_FEE) });
-      startGame(true);
-    } catch (err) { console.error(err); }
+  const handleTap = (e) => {
+    e.preventDefault();
+    if (!isPlaying) return;
+    playTapSound();
+    setScore(s => s + 1);
   };
 
   async function endGame() {
     setIsPlaying(false);
-    setIsFever(false);
     if (timerRef.current) clearInterval(timerRef.current);
     await supabase.from('rounds').insert([{ player_id: address, score: score, is_paid: !canPlayFree }]);
     fetchLeaderboard();
@@ -113,21 +116,27 @@ export default function BaseRush() {
   useEffect(() => { if (timeLeft === 0 && isPlaying) endGame(); }, [timeLeft]);
 
   return (
-    <div style={{ 
-        backgroundColor: isFever ? '#221100' : '#000', 
-        color: '#fff', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', fontFamily: 'monospace',
-        transition: 'background-color 0.3s ease' 
-    }}>
+    <div style={{ backgroundColor: '#000', color: '#fff', minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', fontFamily: 'monospace' }}>
       
+      {/* CLEAN HEADER - NO WHITE BOXES */}
       <div style={{ width: '100%', maxWidth: '800px', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ fontWeight: '900', color: isFever ? '#FF8800' : '#0052FF' }}>BASERUSH</div>
-        <ConnectWallet className="bg-[#0052FF] text-white rounded-lg px-4 py-2" />
+        <div style={{ fontWeight: '900', color: '#0052FF' }}>BASERUSH</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {!isConnected ? (
+            <ConnectWallet className="bg-[#0052FF] text-white rounded-lg px-4 py-2 font-bold border-none" />
+          ) : (
+            <div style={{ background: '#111', padding: '5px 15px', borderRadius: '12px', border: '1px solid #222', display: 'flex', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.8rem', marginRight: '10px' }}>{address.slice(0,6)}...</span>
+              <button onClick={() => disconnect()} style={{ background: 'none', border: 'none', color: '#ff4444', fontSize: '0.7rem', cursor: 'pointer', fontWeight: 'bold' }}>[EXIT]</button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div style={{ textAlign: 'center', marginTop: '40px' }}>
-        <div style={{ fontSize: '10rem', fontWeight: '900', color: isFever ? '#FF8800' : '#fff', lineHeight: '0.8' }}>{score}</div>
-        <div style={{ color: isFever ? '#FF8800' : '#0052FF', fontSize: '1.5rem', fontWeight: 'bold', marginTop: '10px' }}>
-            {isFever ? "🔥 FEVER MODE 2X 🔥" : isPlaying ? `${timeLeft}s` : status}
+        <div style={{ fontSize: '9rem', fontWeight: '900', color: '#fff', lineHeight: '0.8' }}>{score}</div>
+        <div style={{ color: '#0052FF', fontSize: '1.2rem', fontWeight: 'bold', marginTop: '20px' }}>
+            {isPlaying ? `${timeLeft}s` : status}
         </div>
       </div>
 
@@ -135,24 +144,25 @@ export default function BaseRush() {
         onPointerDown={handleTap}
         style={{
           width: '260px', height: '260px', borderRadius: '50%',
-          background: isFever ? 'radial-gradient(circle, #FF880044 0%, #000 100%)' : 'radial-gradient(circle, #0052FF22 0%, #000 100%)',
-          border: `6px solid ${isFever ? '#FF8800' : isPlaying ? '#0052FF' : '#111'}`,
+          background: isPlaying ? 'radial-gradient(circle, #0052FF33 0%, #000 100%)' : '#050505',
+          border: `6px solid ${isPlaying ? '#0052FF' : '#111'}`,
           margin: '40px 0', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', transition: 'all 0.1s', userSelect: 'none', touchAction: 'none'
+          cursor: 'pointer', userSelect: 'none', touchAction: 'none'
         }}
       >
         {!isPlaying && isConnected && (
-            <button onClick={handleStartRequest} style={{ background: '#0052FF', border: 'none', color: '#fff', fontWeight: 'bold', padding: '15px 30px', borderRadius: '12px', cursor: 'pointer' }}>
-                {canPlayFree ? 'START FREE' : `RETRY (${RETRY_FEE} ETH)`}
+            <button onClick={handleStartRequest} style={{ background: '#0052FF', border: 'none', color: '#fff', fontWeight: 'bold', padding: '20px 40px', borderRadius: '15px', cursor: 'pointer', fontSize: '1.2rem' }}>
+                {canPlayFree ? 'START FREE' : `RETRY (0.0001 ETH)`}
             </button>
         )}
+        {isPlaying && <div style={{ fontSize: '2rem', fontWeight: '900', color: '#0052FF', opacity: 0.3 }}>TAP!</div>}
       </div>
 
-      {/* Leaderboard Simplified for Speed */}
-      <div style={{ width: '100%', maxWidth: '400px', background: '#050505', padding: '20px', borderRadius: '20px', border: '1px solid #111' }}>
+      <div style={{ width: '100%', maxWidth: '400px', background: '#050505', padding: '25px', borderRadius: '24px', border: '1px solid #111' }}>
+        <div style={{ fontSize: '0.6rem', color: '#333', textAlign: 'center', marginBottom: '20px', letterSpacing: '4px' }}>TOP RUSHERS</div>
         {leaderboard.map((entry, i) => (
-          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #111' }}>
-            <span style={{ color: '#666' }}>{i + 1}. {entry.player_id.slice(0,10)}</span>
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', borderBottom: i === leaderboard.length - 1 ? 'none' : '1px solid #111' }}>
+            <span style={{ color: i === 0 ? '#00FF88' : '#555', fontSize: '0.8rem' }}>{i + 1}. {entry.player_id.slice(0,10)}</span>
             <span style={{ fontWeight: 'bold' }}>{entry.score}</span>
           </div>
         ))}
